@@ -7,7 +7,7 @@ struct BlueSightDriver: AsyncParsableCommand {
         let blueSight = BlueSight()
 
         while true {
-            print(await blueSight.point)
+            print(blueSight.location)
             try await Task.sleep(nanoseconds: 5_000_000)
         }
     }
