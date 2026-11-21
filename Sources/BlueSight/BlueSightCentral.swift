@@ -1,7 +1,7 @@
 import CoreBluetooth
 
 protocol MeasurementsObserver {
-    func reportGyroscopeMeasurements(x: CGFloat, y: CGFloat, z: CGFloat)
+    func reportAiming(yaw: CGFloat, pitch: CGFloat)
 }
 
 class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
@@ -14,16 +14,14 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     let measurementsObserver: MeasurementsObserver
 
     private var serviceUUID = CBUUID(string: "6AFE4D1F-072D-4769-BF7B-EAA5C43B21F6")
-    private var measurementCharacteristicUUID = CBUUID(string: "62C0A592-CA8C-47B0-AB49-081BCB0411AF")
-    private var ackCharacteristicUUID = CBUUID(string: "0126E2AB-136A-4D5F-B964-8839FF2F0CDC")
+    private var aimingCharacteristicUUID = CBUUID(string: "62C0A592-CA8C-47B0-AB49-081BCB0411AF")
 
-    var ackCharacteristic: CBCharacteristic?
-    
     init(observer: MeasurementsObserver) {
         measurementsObserver = observer
 
         super.init()
         centralManager = CBCentralManager(delegate: self, queue: nil)
+        print("Initialized.")
     }
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
@@ -43,7 +41,7 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         advertisementData: [String: Any], rssi RSSI: NSNumber
     ) {
         if peripheral.name == "Arduino" {
-            statusMessage = "Found BlueSightIMU. Connecting..."
+            statusMessage = "Found BlueSight. Connecting..."
             central.stopScan()
             connectedPeripheral = peripheral
             peripheral.delegate = self
@@ -61,7 +59,7 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         statusMessage = "Connected. Discovering characteristics..."
         for service in services {
             peripheral.discoverCharacteristics(
-                [measurementCharacteristicUUID, ackCharacteristicUUID],
+                [aimingCharacteristicUUID],
                 for: service)
         }
     }
@@ -71,14 +69,10 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     ) {
         guard let characteristics = service.characteristics else { return }
         for characteristic in characteristics {
-            if characteristic.uuid == measurementCharacteristicUUID && characteristic.properties.contains(.notify)
+            if characteristic.uuid == aimingCharacteristicUUID && characteristic.properties.contains(.notify)
             {
-                statusMessage = "Subscribing to BlueSightIMU..."
+                statusMessage = "Subscribing to BlueSight..."
                 peripheral.setNotifyValue(true, for: characteristic)
-            }
-            
-            if characteristic.uuid == ackCharacteristicUUID {
-                ackCharacteristic = characteristic
             }
         }
     }
@@ -90,21 +84,14 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         guard let data = characteristic.value else { return }
 
         let (
-            x, y, z, time
+            yaw, pitch
         ) = data.withUnsafeBytes { bytes in
-            let x = bytes.load(fromByteOffset: 0, as: Float32.self)
-            let y = bytes.load(fromByteOffset: 4, as: Float32.self)
-            let z = bytes.load(fromByteOffset: 8, as: Float32.self)
-            let time = bytes.load(fromByteOffset: 12, as: UInt8.self)
-            return (x, y, z, time)
+            let yaw = bytes.load(fromByteOffset: 0, as: Float32.self)
+            let pitch = bytes.load(fromByteOffset: 4, as: Float32.self)
+            return (yaw, pitch)
         }
 
-        measurementsObserver.reportGyroscopeMeasurements(
-            x: CGFloat(x), y: CGFloat(y), z: CGFloat(z))
-        
-        if let ackCharacteristic {
-            let data = Data(bytes: [time])
-//            peripheral.writeValue(data, for: ackCharacteristic, type: .withoutResponse);
-        }
+        measurementsObserver.reportAiming(
+            yaw: CGFloat(yaw), pitch: CGFloat(pitch))
     }
 }

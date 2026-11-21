@@ -16,18 +16,15 @@ class Point {
         }
     }
 
-    func gyroscope(x: CGFloat, y: CGFloat, z: CGFloat) {
+    func updateWithAiming(yaw: CGFloat, pitch: CGFloat) {
         coordinates.withLock { coords in
-            let currentTime = ContinuousClock.now
-            if let previousTime = self.previousTime {
-                let elapsedTime = previousTime.duration(to: currentTime) / .seconds(1)
-                let deltaZ = 2 * tan(z * elapsedTime * CGFloat.pi / 180.0)
-                let deltaY = 2 * tan(y * elapsedTime * CGFloat.pi / 180.0)
+            let yawRad = yaw * CGFloat.pi / 180.0 
+            let pitchRad = pitch * CGFloat.pi / 180.0
 
-                coords.x = min(max(coords.x - deltaZ, -1.0), +1.0)
-                coords.y = min(max(coords.y + deltaY, -1.0), +1.0)
-            }
-            previousTime = currentTime
+            let yawMax = tan(45.0 * CGFloat.pi / 180.0)
+            let pitchMax = tan(30.0 * CGFloat.pi / 180.0)
+            coords.x = -min(max(tan(yawRad) / yawMax, -1.0), +1.0)
+            coords.y = min(max(tan(pitchRad) / pitchMax, -1.0), +1.0)
         }
     }
 }
@@ -35,6 +32,7 @@ class Point {
 public final class BlueSight: @unchecked Sendable {
     private var central: BlueSightCentral?
     private let currentPoint = Point()
+    private var running = false
 
     public init() {
     }
@@ -49,10 +47,15 @@ public final class BlueSight: @unchecked Sendable {
     public var location: CGPoint {
         self.currentPoint.location
     }
+
+    public var isRunning: Bool {
+        running
+    }
 }
 
 extension BlueSight: MeasurementsObserver {
-    func reportGyroscopeMeasurements(x: CGFloat, y: CGFloat, z: CGFloat) {
-        self.currentPoint.gyroscope(x: x, y: y, z: z)
+    func reportAiming(yaw: CGFloat, pitch: CGFloat) {
+        running = true
+        self.currentPoint.updateWithAiming(yaw: yaw, pitch: pitch)
     }
 }
