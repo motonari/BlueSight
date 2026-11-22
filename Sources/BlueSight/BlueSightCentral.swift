@@ -27,8 +27,7 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         switch central.state {
         case .poweredOn:
-            statusMessage = "Scanning for BlueSightIMU..."
-            central.scanForPeripherals(withServices: [serviceUUID], options: nil)
+            startScanning(central)
         case .poweredOff:
             statusMessage = "Bluetooth is off."
         default:
@@ -40,13 +39,11 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         _ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
         advertisementData: [String: Any], rssi RSSI: NSNumber
     ) {
-        if peripheral.name == "Arduino" {
-            statusMessage = "Found BlueSight. Connecting..."
-            central.stopScan()
-            connectedPeripheral = peripheral
-            peripheral.delegate = self
-            central.connect(peripheral, options: nil)
-        }
+        statusMessage = "Found BlueSight. Connecting..."
+        central.stopScan()
+        connectedPeripheral = peripheral
+        peripheral.delegate = self
+        central.connect(peripheral, options: nil)
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
