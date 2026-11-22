@@ -54,6 +54,22 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         peripheral.discoverServices([serviceUUID])
     }
 
+    func centralManager(
+        _ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?
+    ) {
+        statusMessage = "Disconnected. Scanning for BlueSightIMU..."
+        connectedPeripheral?.delegate = nil
+        connectedPeripheral = nil
+        startScanning(central)
+    }
+
+    func centralManager(
+        _ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?
+    ) {
+        connectedPeripheral = nil
+        startScanning(central)
+    }
+
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard let services = peripheral.services else { return }
         statusMessage = "Connected. Discovering characteristics..."
@@ -93,5 +109,11 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
 
         measurementsObserver.reportAiming(
             yaw: CGFloat(yaw), pitch: CGFloat(pitch))
+    }
+
+    private func startScanning(_ central: CBCentralManager) {
+        guard central.state == .poweredOn, !central.isScanning else { return }
+        statusMessage = "Scanning for BlueSightIMU..."
+        central.scanForPeripherals(withServices: [serviceUUID], options: nil)
     }
 }
