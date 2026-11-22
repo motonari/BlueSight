@@ -29,6 +29,8 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         case .poweredOn:
             startScanning(central)
         case .poweredOff:
+            connectedPeripheral?.delegate = nil
+            connectedPeripheral = nil
             statusMessage = "Bluetooth is off."
         default:
             statusMessage = "Bluetooth state: \(central.state.rawValue)"
