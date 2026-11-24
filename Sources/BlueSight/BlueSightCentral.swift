@@ -2,6 +2,21 @@ import CoreBluetooth
 
 protocol MeasurementsObserver {
     func reportAiming(yaw: CGFloat, pitch: CGFloat)
+    func reportDisconnected()
+}
+
+/// Reads yaw and pitch in degrees from an aiming packet.
+/// Returns nil if the packet is too short or holds non-finite values.
+func parseAiming(_ data: Data) -> (yaw: CGFloat, pitch: CGFloat)? {
+    guard data.count >= 2 * MemoryLayout<Float32>.size else { return nil }
+    let (yaw, pitch) = data.withUnsafeBytes { bytes in
+        (
+            bytes.loadUnaligned(fromByteOffset: 0, as: Float32.self),
+            bytes.loadUnaligned(fromByteOffset: 4, as: Float32.self)
+        )
+    }
+    guard yaw.isFinite, pitch.isFinite else { return nil }
+    return (CGFloat(yaw), CGFloat(pitch))
 }
 
 class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
@@ -31,6 +46,7 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         case .poweredOff:
             connectedPeripheral?.delegate = nil
             connectedPeripheral = nil
+            measurementsObserver.reportDisconnected()
             statusMessage = "Bluetooth is off."
         default:
             statusMessage = "Bluetooth state: \(central.state.rawValue)"
@@ -59,6 +75,7 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         statusMessage = "Disconnected. Scanning for BlueSightIMU..."
         connectedPeripheral?.delegate = nil
         connectedPeripheral = nil
+        measurementsObserver.reportDisconnected()
         startScanning(central)
     }
 
@@ -96,18 +113,9 @@ class BlueSightCentral: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         _ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic,
         error: Error?
     ) {
-        guard let data = characteristic.value else { return }
+        guard let data = characteristic.value, let aiming = parseAiming(data) else { return }
 
-        let (
-            yaw, pitch
-        ) = data.withUnsafeBytes { bytes in
-            let yaw = bytes.load(fromByteOffset: 0, as: Float32.self)
-            let pitch = bytes.load(fromByteOffset: 4, as: Float32.self)
-            return (yaw, pitch)
-        }
-
-        measurementsObserver.reportAiming(
-            yaw: CGFloat(yaw), pitch: CGFloat(pitch))
+        measurementsObserver.reportAiming(yaw: aiming.yaw, pitch: aiming.pitch)
     }
 
     private func startScanning(_ central: CBCentralManager) {

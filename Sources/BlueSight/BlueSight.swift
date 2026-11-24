@@ -32,7 +32,7 @@ class Point {
 public final class BlueSight: @unchecked Sendable {
     private var central: BlueSightCentral?
     private let currentPoint = Point()
-    private var running = false
+    private let running = Mutex(false)
 
     public init() {
     }
@@ -48,14 +48,19 @@ public final class BlueSight: @unchecked Sendable {
         self.currentPoint.location
     }
 
+    /// True while aiming data is arriving; false again after a disconnect.
     public var isRunning: Bool {
-        running
+        running.withLock { $0 }
     }
 }
 
 extension BlueSight: MeasurementsObserver {
     func reportAiming(yaw: CGFloat, pitch: CGFloat) {
-        running = true
         self.currentPoint.updateWithAiming(yaw: yaw, pitch: pitch)
+        running.withLock { $0 = true }
+    }
+
+    func reportDisconnected() {
+        running.withLock { $0 = false }
     }
 }
